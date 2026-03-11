@@ -1,0 +1,21 @@
+[package]
+name = "vpnx"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.59", features = ["derive"] }
+colored = "3.1.1"
+ctrlc = "3.4"
+fs2 = "0.4"
+image = "0.25.10"
+keyring = { version = "3.6.3", features = ["windows-native"] }
+rpassword = "7.4.0"
+rqrr = "0.10.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tempfile = "3.25.0"
+totp-rs = { version = "5.7.0", features = ["otpauth"] }
+which = "8.0.0"
+xcap = "0.9.1"
+zeroize = "1.8.1"

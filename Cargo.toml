@@ -1,6 +1,6 @@
 [package]
 name = "vpnx"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 description = "OpenVPN wrapper with native OS credential storage and TOTP/MFA automation, including QR code scanning from screen."
 license = "MIT OR Apache-2.0"

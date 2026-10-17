@@ -25,3 +25,6 @@ libxcb1-dev = "*"
 libxkbcommon-dev = "*"
 libdbus-1-dev = "*"
 "libpipewire-0.3-dev" = "*"
+# khronos-egl (via xcap's Wayland capture) needs egl.pc; libwayshot needs gbm
+libegl-dev = "*"
+libgbm-dev = "*"

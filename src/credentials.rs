@@ -8,6 +8,33 @@ use image::DynamicImage;
 
 const KEYRING_SERVICE: &str = "openvpn-wrapper";
 
+/// Build the keyring entry for a secret (`name` is the config name, or `<config>-otp`).
+///
+/// On Windows the target names the Credential Manager entry. Elsewhere the default
+/// store is used: on Linux (Secret Service) a custom target would create a separate
+/// collection per entry, and on macOS the target must be a keychain domain.
+fn keyring_entry(name: &str) -> keyring::Result<keyring::Entry> {
+    #[cfg(target_os = "windows")]
+    {
+        keyring::Entry::new_with_target(&format!("openvpn-wrapper:{}", name), KEYRING_SERVICE, name)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        keyring::Entry::new(KEYRING_SERVICE, name)
+    }
+}
+
+/// Human-readable name of the OS credential store.
+fn keyring_store_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "Windows Credential Manager"
+    } else if cfg!(target_os = "macos") {
+        "macOS Keychain"
+    } else {
+        "system keyring (Secret Service)"
+    }
+}
+
 /// Prompt user for credentials and save them.
 pub fn save_credentials(config_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     if config_name.is_empty() || !config_name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
@@ -78,20 +105,18 @@ pub fn save_credentials(config_name: &str) -> Result<(), Box<dyn std::error::Err
 
     println!();
 
-    // Store password in system keyring using explicit target
-    let target = format!("openvpn-wrapper:{}", config_name);
-    let entry = keyring::Entry::new_with_target(&target, KEYRING_SERVICE, config_name)?;
+    // Store password in system keyring
+    let entry = keyring_entry(config_name)?;
     entry.set_password(&password)?;
     println!(
         "  {} {}",
         "✓".green().bold(),
-        "Password stored in Windows Credential Manager".green()
+        format!("Password stored in {}", keyring_store_name()).green()
     );
 
     // Store OTP in keyring if provided
     if !otp.is_empty() {
-        let otp_target = format!("openvpn-wrapper:{}-otp", config_name);
-        let otp_entry = keyring::Entry::new_with_target(&otp_target, KEYRING_SERVICE, &format!("{}-otp", config_name))?;
+        let otp_entry = keyring_entry(&format!("{}-otp", config_name))?;
         otp_entry.set_password(&otp)?;
         println!("  {} {}", "✓".green().bold(), "OTP secret stored securely".green());
     }
@@ -124,15 +149,13 @@ pub fn get_credentials(config_name: &str) -> Result<(String, Zeroizing<String>, 
         .get(config_name)
         .ok_or_else(|| format!("No saved config found for '{}'. Run 'save-auth {}' first.", config_name, config_name))?;
 
-    let target = format!("openvpn-wrapper:{}", config_name);
-    let entry = keyring::Entry::new_with_target(&target, KEYRING_SERVICE, config_name)?;
+    let entry = keyring_entry(config_name)?;
     let password = entry.get_password().map_err(|e| {
         format!("Could not retrieve password: {}. Try 'save-auth {}' again.", e, config_name)
     })?;
     let password = Zeroizing::new(password);
 
-    let otp_target = format!("openvpn-wrapper:{}-otp", config_name);
-    let otp = keyring::Entry::new_with_target(&otp_target, KEYRING_SERVICE, &format!("{}-otp", config_name))
+    let otp = keyring_entry(&format!("{}-otp", config_name))
         .ok()
         .and_then(|e| e.get_password().ok())
         .map(Zeroizing::new);
@@ -198,12 +221,10 @@ pub fn list_configs() -> Result<(), Box<dyn std::error::Error>> {
 /// Delete saved credentials for a config.
 pub fn delete_credentials(config_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Remove from keyring
-    let target = format!("openvpn-wrapper:{}", config_name);
-    if let Ok(entry) = keyring::Entry::new_with_target(&target, KEYRING_SERVICE, config_name) {
+    if let Ok(entry) = keyring_entry(config_name) {
         let _ = entry.delete_credential();
     }
-    let otp_target = format!("openvpn-wrapper:{}-otp", config_name);
-    if let Ok(entry) = keyring::Entry::new_with_target(&otp_target, KEYRING_SERVICE, &format!("{}-otp", config_name)) {
+    if let Ok(entry) = keyring_entry(&format!("{}-otp", config_name)) {
         let _ = entry.delete_credential();
     }
 

@@ -90,6 +90,8 @@ pub fn connect(config_name: &str, extra_args: &[String], verbose: bool) -> Resul
 
         let mut child = cmd.spawn()?;
         let status = child.wait()?;
+        // Delete the auth file now: process::exit below skips its destructor.
+        let _ = auth_temp_path.close();
 
         if shutdown.load(Ordering::SeqCst) {
             println!();
@@ -179,6 +181,8 @@ pub fn connect(config_name: &str, extra_args: &[String], verbose: bool) -> Resul
         let _ = stdout_handle.join();
         let _ = stderr_handle.join();
         let status = child.wait()?;
+        // Delete the auth file now: process::exit below skips its destructor.
+        let _ = auth_temp_path.close();
 
         if shutdown.load(Ordering::SeqCst) {
             if connected {

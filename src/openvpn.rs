@@ -71,7 +71,7 @@ pub fn connect(config_name: &str, extra_args: &[String], verbose: bool) -> Resul
     }
 
     // Build command
-    let mut cmd = Command::new(&openvpn);
+    let mut cmd = openvpn_command(&openvpn)?;
     cmd.arg("--config")
         .arg(&vpn_config.ovpn_file)
         .arg("--auth-user-pass")
@@ -90,6 +90,8 @@ pub fn connect(config_name: &str, extra_args: &[String], verbose: bool) -> Resul
 
         let mut child = cmd.spawn()?;
         let status = child.wait()?;
+        // Delete the auth file now: process::exit below skips its destructor.
+        let _ = auth_temp_path.close();
 
         if shutdown.load(Ordering::SeqCst) {
             println!();
@@ -179,6 +181,8 @@ pub fn connect(config_name: &str, extra_args: &[String], verbose: bool) -> Resul
         let _ = stdout_handle.join();
         let _ = stderr_handle.join();
         let status = child.wait()?;
+        // Delete the auth file now: process::exit below skips its destructor.
+        let _ = auth_temp_path.close();
 
         if shutdown.load(Ordering::SeqCst) {
             if connected {
@@ -225,6 +229,42 @@ fn find_openvpn() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     which::which("openvpn").map_err(|_| {
         "Could not find 'openvpn' in PATH. Make sure OpenVPN is installed.".into()
     })
+}
+
+/// Create the command that runs OpenVPN.
+///
+/// On Linux OpenVPN needs root to create the tun device and routes, while the
+/// credentials live in the user's keyring and config. So vpnx stays unprivileged
+/// and only OpenVPN is started through sudo.
+fn openvpn_command(openvpn: &std::path::Path) -> Result<Command, Box<dyn std::error::Error>> {
+    #[cfg(target_os = "linux")]
+    {
+        if !is_root() {
+            let sudo = which::which("sudo").map_err(|_| {
+                "OpenVPN needs root on Linux, but 'sudo' was not found in PATH."
+            })?;
+            println!("{}", "  Starting OpenVPN with sudo (root is required for the tun device)...".dimmed());
+            let mut cmd = Command::new(sudo);
+            cmd.arg("--").arg(openvpn);
+            return Ok(cmd);
+        }
+    }
+    Ok(Command::new(openvpn))
+}
+
+/// Whether the current process runs with effective UID 0.
+#[cfg(target_os = "linux")]
+fn is_root() -> bool {
+    // "Uid:" line in /proc/self/status: real, effective, saved, filesystem
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|status| {
+            status
+                .lines()
+                .find(|line| line.starts_with("Uid:"))
+                .and_then(|line| line.split_whitespace().nth(2).map(|euid| euid == "0"))
+        })
+        .unwrap_or(false)
 }
 
 /// Generate a TOTP code from an otpauth:// URI or a raw base32 secret.

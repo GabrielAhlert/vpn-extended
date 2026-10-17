@@ -16,6 +16,10 @@ Ao invés de ter que digitar senhas extensas, buscar códigos no celular ou salv
 ### Pré-requisitos
 1. **Rust:** O projeto é compilado em Rust. Se você não possui a linguagem instalada, baixe pelo [rustup.rs](https://rustup.rs/).
 2. **OpenVPN:** O `vpnx` requer que o executável `openvpn` esteja disponível na sua variável de ambiente `PATH`.
+3. **Linux:** as credenciais ficam no Secret Service (KWallet/KDE ou GNOME Keyring). Rode o `vpnx` como seu usuário, sem `sudo`: no `connect` ele inicia apenas o `openvpn` via `sudo`, que precisa de root para criar a interface tun. Para compilar são necessários os headers de sistema; no Fedora:
+   ```bash
+   sudo dnf install rust cargo clang-devel dbus-devel pipewire-devel wayland-devel libxcb-devel libxkbcommon-devel mesa-libEGL-devel mesa-libgbm-devel
+   ```
 
 ### Build
 Clone este repositório e faça o build do executável otimizado:

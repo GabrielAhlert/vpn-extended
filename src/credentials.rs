@@ -35,6 +35,30 @@ fn keyring_store_name() -> &'static str {
     }
 }
 
+/// Remove one pair of surrounding quotes, as added by "Copy as path" or drag-and-drop.
+fn strip_quotes(path: &str) -> &str {
+    for quote in ['"', '\''] {
+        if let Some(inner) = path.strip_prefix(quote).and_then(|p| p.strip_suffix(quote)) {
+            return inner;
+        }
+    }
+    path
+}
+
+/// Expand a leading `~` to the home directory (the shell does not expand it inside prompts).
+fn expand_home(path: &str) -> String {
+    let rest = if path == "~" {
+        Some("")
+    } else {
+        path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\"))
+    };
+    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE"));
+    match (rest, home) {
+        (Some(rest), Ok(home)) => std::path::Path::new(&home).join(rest).to_string_lossy().to_string(),
+        _ => path.to_string(),
+    }
+}
+
 /// Prompt user for credentials and save them.
 pub fn save_credentials(config_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     if config_name.is_empty() || !config_name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
@@ -53,7 +77,7 @@ pub fn save_credentials(config_name: &str) -> Result<(), Box<dyn std::error::Err
     io::stdout().flush()?;
     let mut ovpn_file = String::new();
     io::stdin().read_line(&mut ovpn_file)?;
-    let ovpn_file = ovpn_file.trim().to_string();
+    let ovpn_file = expand_home(strip_quotes(ovpn_file.trim()));
 
     if ovpn_file.is_empty() {
         return Err("Config file path cannot be empty".into());
@@ -63,6 +87,8 @@ pub fn save_credentials(config_name: &str) -> Result<(), Box<dyn std::error::Err
     if !ovpn_path.exists() || !ovpn_path.is_file() {
         return Err(format!("File '{}' does not exist or is not a regular file", ovpn_file).into());
     }
+    // Store an absolute path so `connect` works from any directory.
+    let ovpn_file = std::path::absolute(ovpn_path)?.to_string_lossy().to_string();
 
     // Prompt for username
     print!("  {} ", "Username:".bold());

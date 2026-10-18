@@ -18,6 +18,10 @@ hosting = "github"
 # Whether to install an updater program
 install-updater = false
 
+# The libspa crate (pipewire, via xcap) needs PipeWire >= 1.0 headers; ubuntu-22.04 ships 0.3.48
+[dist.github-custom-runners]
+x86_64-unknown-linux-gnu = "ubuntu-24.04"
+
 # System libraries needed by xcap (screen capture / QR scan) and keyring (secret-service via dbus)
 [dist.dependencies.apt]
 libwayland-dev = "*"
